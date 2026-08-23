@@ -3,23 +3,23 @@
 
 dungeon_loot.registered_loot = {
 	-- various items
-	{name = "default:stick", chance = 0.6, count = {3, 6}},
-	{name = "default:flint", chance = 0.4, count = {1, 3}},
+	{name = "default:stick", chance = 0.7, count = {3, 8}},
+	{name = "default:flint", chance = 0.85, count = {2, 5}},
 
 	-- farming / consumable
-	{name = "default:apple", chance = 0.4, count = {1, 4}},
-	{name = "default:cactus", chance = 0.4, count = {1, 4},
+	{name = "default:apple", chance = 0.5, count = {1, 5}},
+	{name = "default:cactus", chance = 0.4, count = {1, 5},
 		types = {"sandstone", "desert"}},
 
 	-- minerals
-	{name = "default:coal_lump", chance = 0.9, count = {1, 12}},
+	{name = "default:coal_lump", chance = 0.9, count = {2, 15}},
 	{name = "default:gold_ingot", chance = 0.5},
-	{name = "default:steel_ingot", chance = 0.4, count = {1, 6}},
-	{name = "default:mese_crystal", chance = 0.1, count = {2, 3}},
+	{name = "default:steel_ingot", chance = 0.5, count = {1, 8}},
+	{name = "default:mese_crystal", chance = 0.15, count = {2, 4}},
 
 	-- tools
 	{name = "default:sword_wood", chance = 0.6},
-	{name = "default:pick_stone", chance = 0.3},
+	{name = "default:pick_stone", chance = 0.4},
 	{name = "default:axe_diamond", chance = 0.05},
 
 	-- natural materials

@@ -70,6 +70,20 @@ local function find_walls(cpos, is_temple)
 	}
 end
 
+local function get_dungeon_type(pos)
+	local biome = minetest.get_biome_data(pos)
+	biome = biome and minetest.get_biome_name(biome.biome) or ""
+	local type = "normal"
+	if biome:find("desert") == 1 then
+		type = "desert"
+	elseif biome:find("sandstone_desert") == 1 then
+		type = "sandstone"
+	elseif biome:find("icesheet") == 1 then
+		type = "ice"
+	end
+	return type
+end
+
 local function populate_chest(pos, rand, dungeontype)
 	--minetest.chat_send_all("chest placed at " .. minetest.pos_to_string(pos) .. " [" .. dungeontype .. "]")
 	--minetest.add_node(vector.add(pos, {x=0, y=1, z=0}), {name="default:torch", param2=1})
@@ -81,12 +95,17 @@ local function populate_chest(pos, rand, dungeontype)
 
 	-- apply chances / randomized amounts and collect resulting items
 	local items = {}
+	local has_flint = false
 	for _, loot in ipairs(item_list) do
 		if rand:next(0, 1000) / 1000 <= loot.chance then
 			local itemdef = minetest.registered_items[loot.name]
 			local amount = 1
 			if loot.count ~= nil then
 				amount = rand:next(loot.count[1], loot.count[2])
+			end
+
+			if loot.name == "default:flint" then
+				has_flint = true
 			end
 
 			if not itemdef then
@@ -107,6 +126,12 @@ local function populate_chest(pos, rand, dungeontype)
 		end
 	end
 
+	-- Guaranteed: every chest must have flint
+	if not has_flint then
+		local flint_amount = rand:next(2, 5)
+		table.insert(items, ItemStack({name = "default:flint", count = flint_amount}))
+	end
+
 	-- place items at random places in chest
 	local inv = minetest.get_meta(pos):get_inventory()
 	local listsz = inv:get_size("main")
@@ -121,6 +146,50 @@ local function populate_chest(pos, rand, dungeontype)
 	end
 end
 
+local function find_cave_chest_positions(minp, maxp, rand)
+	local positions = {}
+	local get_node = minetest.get_node
+	local is_solid = function(node)
+		return node.name ~= "air" and node.name ~= "ignore"
+	end
+
+	-- Sample points in the chunk underground to find cave floors
+	local x_span = maxp.x - minp.x
+	local z_span = maxp.z - minp.z
+	local y_start = math.min(maxp.y, -5)
+	local y_end = math.max(minp.y, -31000)
+
+	if y_start <= y_end then
+		return positions
+	end
+
+	-- Sample a grid of points to find suitable cave floor
+	local step = 8
+	for x = minp.x + 2, maxp.x - 2, step do
+		for z = minp.z + 2, maxp.z - 2, step do
+			-- Scan vertically for air-with-floor patterns (cave floors)
+			for y = y_start - 1, y_end + 1, -1 do
+				local pos = {x=x, y=y, z=z}
+				local node = get_node(pos)
+				if node.name == "air" then
+					local below = get_node({x=x, y=y-1, z=z})
+					local above = get_node({x=x, y=y+1, z=z})
+					if is_solid(below) and above.name == "air" then
+						-- Check it's not just a tiny crevice (2+ air above)
+						local above2 = get_node({x=x, y=y+2, z=z})
+						if above2.name == "air" then
+							table.insert(positions, vector.new(pos))
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return positions
+end
+
 
 minetest.register_on_generated(function(minp, maxp, blockseed)
 	local gennotify = minetest.get_mapgen_object("gennotify")
@@ -130,44 +199,74 @@ minetest.register_on_generated(function(minp, maxp, blockseed)
 	for _, entry in ipairs(gennotify["temple"] or {}) do
 		table.insert(poslist, entry)
 	end
-	if #poslist == 0 then return end
 
 	local noise = minetest.get_perlin(10115, 4, 0.5, 1)
-	local rand = PcgRandom(noise3d_integer(noise, poslist[1]))
+	local base_rand = PcgRandom(noise3d_integer(noise, {x=minp.x, y=minp.y, z=minp.z}))
+	local has_dungeon_processed = false
 
-	local candidates = {}
-	-- process at most 8 rooms to keep runtime of this predictable
-	local num_process = math.min(#poslist, 8)
-	for i = 1, num_process do
-		local room = find_walls(poslist[i], i > n_dungeons)
-		-- skip small rooms and everything that doesn't at least have 3 walls
-		if math.min(room.size.x, room.size.z) >= 4 and #room.walls >= 3 then
-			table.insert(candidates, room)
+	if #poslist > 0 then
+		local rand = PcgRandom(noise3d_integer(noise, poslist[1]))
+
+		local candidates = {}
+		-- process at most 8 rooms to keep runtime of this predictable
+		local num_process = math.min(#poslist, 8)
+		for i = 1, num_process do
+			local room = find_walls(poslist[i], i > n_dungeons)
+			-- skip small rooms and everything that doesn't at least have 3 walls
+			if math.min(room.size.x, room.size.z) >= 4 and #room.walls >= 3 then
+				table.insert(candidates, room)
+			end
 		end
+
+		local num_chests = rand:next(dungeon_loot.CHESTS_MIN, dungeon_loot.CHESTS_MAX)
+		num_chests = math.min(#candidates, num_chests)
+		local rooms = random_sample(rand, candidates, num_chests)
+
+		for _, room in ipairs(rooms) do
+			-- choose place somewhere in front of any of the walls
+			local wall = room.walls[rand:next(1, #room.walls)]
+			local v, vi -- vector / axis that runs alongside the wall
+			if wall.facing.x ~= 0 then
+				v, vi = {x=0, y=0, z=1}, "z"
+			else
+				v, vi = {x=1, y=0, z=0}, "x"
+			end
+			local chestpos = vector.add(wall.pos, wall.facing)
+			local off = rand:next(-room.size[vi]/2 + 1, room.size[vi]/2 - 1)
+			chestpos = vector.add(chestpos, vector.multiply(v, off))
+
+			if minetest.get_node(chestpos).name == "air" then
+				-- make it face inwards to the room
+				local facedir = minetest.dir_to_facedir(vector.multiply(wall.facing, -1))
+				minetest.add_node(chestpos, {name = "default:chest", param2 = facedir})
+				populate_chest(chestpos, PcgRandom(noise3d_integer(noise, chestpos)), room.type)
+			end
+		end
+		has_dungeon_processed = #rooms > 0
 	end
 
-	local num_chests = rand:next(dungeon_loot.CHESTS_MIN, dungeon_loot.CHESTS_MAX)
-	num_chests = math.min(#candidates, num_chests)
-	local rooms = random_sample(rand, candidates, num_chests)
-
-	for _, room in ipairs(rooms) do
-		-- choose place somewhere in front of any of the walls
-		local wall = room.walls[rand:next(1, #room.walls)]
-		local v, vi -- vector / axis that runs alongside the wall
-		if wall.facing.x ~= 0 then
-			v, vi = {x=0, y=0, z=1}, "z"
-		else
-			v, vi = {x=1, y=0, z=0}, "x"
-		end
-		local chestpos = vector.add(wall.pos, wall.facing)
-		local off = rand:next(-room.size[vi]/2 + 1, room.size[vi]/2 - 1)
-		chestpos = vector.add(chestpos, vector.multiply(v, off))
-
-		if minetest.get_node(chestpos).name == "air" then
-			-- make it face inwards to the room
-			local facedir = minetest.dir_to_facedir(vector.multiply(wall.facing, -1))
-			minetest.add_node(chestpos, {name = "default:chest", param2 = facedir})
-			populate_chest(chestpos, PcgRandom(noise3d_integer(noise, chestpos)), room.type)
+	-- Now place chests in caves / large caves (underground areas)
+	if maxp.y < 0 and base_rand:next(0, 1000) / 1000 <= dungeon_loot.CAVE_CHEST_CHANCE then
+		local cave_positions = find_cave_chest_positions(minp, maxp, base_rand)
+		if #cave_positions > 0 then
+			local max_cave_chests = dungeon_loot.CAVE_CHESTS_PER_CHUNK
+			if maxp.y < -64 then
+				max_cave_chests = max_cave_chests + 1
+			end
+			if maxp.y < -256 then
+				max_cave_chests = max_cave_chests + 1
+			end
+			local num_cave_chests = math.min(#cave_positions,
+				base_rand:next(1, max_cave_chests))
+			local chosen = random_sample(base_rand, cave_positions, num_cave_chests)
+			for _, cpos in ipairs(chosen) do
+				if minetest.get_node(cpos).name == "air" then
+					local dtype = get_dungeon_type(cpos)
+					local facedir = base_rand:next(0, 3)
+					minetest.add_node(cpos, {name = "default:chest", param2 = facedir})
+					populate_chest(cpos, PcgRandom(noise3d_integer(noise, cpos)), dtype)
+				end
+			end
 		end
 	end
 end)

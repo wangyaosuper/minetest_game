@@ -23,8 +23,8 @@ player_api.register_model("character.b3d", {
 -- Update appearance when the player joins
 minetest.register_on_joinplayer(function(player)
 	player_api.set_model(player, "character.b3d")
-	player:set_properties({hp_max = 60})
-	if player:get_hp() > 60 then
-		player:set_hp(60)
+	player:set_properties({hp_max = 100})
+	if player:get_hp() > 100 then
+		player:set_hp(100)
 	end
 end)
