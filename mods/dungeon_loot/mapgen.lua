@@ -7,6 +7,9 @@ end
 local function random_sample(rand, list, count)
 	local ret = {}
 	for n = 1, count do
+		if #list == 0 then
+			break
+		end
 		local idx = rand:next(1, #list)
 		table.insert(ret, list[idx])
 		table.remove(list, idx)
@@ -85,9 +88,6 @@ local function get_dungeon_type(pos)
 end
 
 local function populate_chest(pos, rand, dungeontype)
-	--minetest.chat_send_all("chest placed at " .. minetest.pos_to_string(pos) .. " [" .. dungeontype .. "]")
-	--minetest.add_node(vector.add(pos, {x=0, y=1, z=0}), {name="default:torch", param2=1})
-
 	local item_list = dungeon_loot._internal_get_loot(pos.y, dungeontype)
 	-- take random (partial) sample of all possible items
 	local sample_n = math.min(#item_list, dungeon_loot.STACKS_PER_CHEST_MAX)
@@ -116,7 +116,6 @@ local function populate_chest(pos, rand, dungeontype)
 					table.insert(items, ItemStack({name = loot.name, wear = wear}))
 				end
 			elseif itemdef.stack_max == 1 then
-				-- not stackable, add separately
 				for n = 1, amount do
 					table.insert(items, loot.name)
 				end
@@ -141,45 +140,76 @@ local function populate_chest(pos, rand, dungeontype)
 		if inv:get_stack("main", index):is_empty() then
 			inv:set_stack("main", index, item)
 		else
-			inv:add_item("main", item) -- space occupied, just put it anywhere
+			inv:add_item("main", item)
 		end
 	end
 end
 
-local function find_cave_chest_positions(minp, maxp, rand)
+-- Measures how tall the cave is at (x,z) starting from y (air pos), returns height in nodes
+local function measure_cave_height(get_node, x, y_start, z, max_scan)
+	local h = 0
+	for y = y_start, y_start + max_scan - 1 do
+		if get_node({x=x, y=y, z=z}).name == "air" then
+			h = h + 1
+		else
+			break
+		end
+	end
+	return h
+end
+
+-- Returns {positions=..., large_cave_count=N} where N tall caves counted >=6 tall
+local function find_cave_chest_positions(minp, maxp)
 	local positions = {}
+	local large_cave_positions = {}
 	local get_node = minetest.get_node
 	local is_solid = function(node)
-		return node.name ~= "air" and node.name ~= "ignore"
+		if node.name == "air" or node.name == "ignore" then
+			return false
+		end
+		local def = minetest.registered_nodes[node.name]
+		if not def then
+			return true
+		end
+		return def.walkable ~= false
 	end
 
-	-- Sample points in the chunk underground to find cave floors
-	local x_span = maxp.x - minp.x
-	local z_span = maxp.z - minp.z
-	local y_start = math.min(maxp.y, -5)
+	local y_start = math.min(maxp.y, -3)
 	local y_end = math.max(minp.y, -31000)
-
 	if y_start <= y_end then
-		return positions
+		return {positions = positions, large_cave_positions = large_cave_positions}
 	end
 
-	-- Sample a grid of points to find suitable cave floor
-	local step = 8
-	for x = minp.x + 2, maxp.x - 2, step do
-		for z = minp.z + 2, maxp.z - 2, step do
-			-- Scan vertically for air-with-floor patterns (cave floors)
-			for y = y_start - 1, y_end + 1, -1 do
-				local pos = {x=x, y=y, z=z}
-				local node = get_node(pos)
+	-- Denser sampling: step 4 instead of 8, so we don't miss small-medium caves
+	local step = 4
+	for x = minp.x + 1, maxp.x - 1, step do
+		for z = minp.z + 1, maxp.z - 1, step do
+			-- scan vertically downward, find multiple floors not just one
+			local floors_found_here = 0
+			for y = y_start, y_end + 1, -1 do
+				local feet = {x=x, y=y, z=z}
+				local node = get_node(feet)
 				if node.name == "air" then
 					local below = get_node({x=x, y=y-1, z=z})
-					local above = get_node({x=x, y=y+1, z=z})
-					if is_solid(below) and above.name == "air" then
-						-- Check it's not just a tiny crevice (2+ air above)
-						local above2 = get_node({x=x, y=y+2, z=z})
-						if above2.name == "air" then
-							table.insert(positions, vector.new(pos))
-							break
+					if is_solid(below) then
+						-- Check headroom: >=3 nodes of air above means a proper cave
+						local h3 = get_node({x=x, y=y+1, z=z}).name == "air"
+						local h4 = get_node({x=x, y=y+2, z=z}).name == "air"
+						if h3 and h4 then
+							local cave_h = 3 + measure_cave_height(get_node, x, y + 3, z, 12)
+							local pos_vec = vector.new(feet)
+							if cave_h >= 6 then
+								-- tall/large cave
+								table.insert(large_cave_positions, pos_vec)
+							else
+								table.insert(positions, pos_vec)
+							end
+							floors_found_here = floors_found_here + 1
+							if floors_found_here >= 3 then
+								break
+							end
+							-- skip a few nodes down to avoid same floor stacking
+							y = y - 3
 						end
 					end
 				end
@@ -187,32 +217,31 @@ local function find_cave_chest_positions(minp, maxp, rand)
 		end
 	end
 
-	return positions
+	return {
+		positions = positions,
+		large_cave_positions = large_cave_positions,
+	}
 end
-
 
 minetest.register_on_generated(function(minp, maxp, blockseed)
 	local gennotify = minetest.get_mapgen_object("gennotify")
 	local poslist = gennotify["dungeon"] or {}
 	local n_dungeons = #poslist
-	-- Add MGv6 desert temples to the list too
 	for _, entry in ipairs(gennotify["temple"] or {}) do
 		table.insert(poslist, entry)
 	end
 
 	local noise = minetest.get_perlin(10115, 4, 0.5, 1)
 	local base_rand = PcgRandom(noise3d_integer(noise, {x=minp.x, y=minp.y, z=minp.z}))
-	local has_dungeon_processed = false
 
+	-- 1) Dungeons (engine-identified dungeons/temples) -- chests
 	if #poslist > 0 then
 		local rand = PcgRandom(noise3d_integer(noise, poslist[1]))
 
 		local candidates = {}
-		-- process at most 8 rooms to keep runtime of this predictable
-		local num_process = math.min(#poslist, 8)
+		local num_process = math.min(#poslist, 10)
 		for i = 1, num_process do
 			local room = find_walls(poslist[i], i > n_dungeons)
-			-- skip small rooms and everything that doesn't at least have 3 walls
 			if math.min(room.size.x, room.size.z) >= 4 and #room.walls >= 3 then
 				table.insert(candidates, room)
 			end
@@ -223,42 +252,37 @@ minetest.register_on_generated(function(minp, maxp, blockseed)
 		local rooms = random_sample(rand, candidates, num_chests)
 
 		for _, room in ipairs(rooms) do
-			-- choose place somewhere in front of any of the walls
 			local wall = room.walls[rand:next(1, #room.walls)]
-			local v, vi -- vector / axis that runs alongside the wall
+			local v, vi
 			if wall.facing.x ~= 0 then
 				v, vi = {x=0, y=0, z=1}, "z"
 			else
 				v, vi = {x=1, y=0, z=0}, "x"
 			end
 			local chestpos = vector.add(wall.pos, wall.facing)
-			local off = rand:next(-room.size[vi]/2 + 1, room.size[vi]/2 - 1)
+			local off = rand:next(-math.floor(room.size[vi]/2) + 1, math.floor(room.size[vi]/2) - 1)
 			chestpos = vector.add(chestpos, vector.multiply(v, off))
 
 			if minetest.get_node(chestpos).name == "air" then
-				-- make it face inwards to the room
 				local facedir = minetest.dir_to_facedir(vector.multiply(wall.facing, -1))
 				minetest.add_node(chestpos, {name = "default:chest", param2 = facedir})
 				populate_chest(chestpos, PcgRandom(noise3d_integer(noise, chestpos)), room.type)
 			end
 		end
-		has_dungeon_processed = #rooms > 0
 	end
 
-	-- Now place chests in caves / large caves (underground areas)
+	-- 2) Caves & Large Caves (all underground chunks) -- chests
 	if maxp.y < 0 and base_rand:next(0, 1000) / 1000 <= dungeon_loot.CAVE_CHEST_CHANCE then
-		local cave_positions = find_cave_chest_positions(minp, maxp, base_rand)
-		if #cave_positions > 0 then
-			local max_cave_chests = dungeon_loot.CAVE_CHESTS_PER_CHUNK
-			if maxp.y < -64 then
-				max_cave_chests = max_cave_chests + 1
+		local cave_info = find_cave_chest_positions(minp, maxp)
+		local cave_positions = cave_info.positions or {}
+		local large_positions = cave_info.large_cave_positions or {}
+
+		local function place_chests_from(list, max_n)
+			if #list == 0 or max_n <= 0 then
+				return
 			end
-			if maxp.y < -256 then
-				max_cave_chests = max_cave_chests + 1
-			end
-			local num_cave_chests = math.min(#cave_positions,
-				base_rand:next(1, max_cave_chests))
-			local chosen = random_sample(base_rand, cave_positions, num_cave_chests)
+			local n = math.min(#list, max_n)
+			local chosen = random_sample(base_rand, list, n)
 			for _, cpos in ipairs(chosen) do
 				if minetest.get_node(cpos).name == "air" then
 					local dtype = get_dungeon_type(cpos)
@@ -268,5 +292,27 @@ minetest.register_on_generated(function(minp, maxp, blockseed)
 				end
 			end
 		end
+
+		-- Normal/small caves: 1 ~ CAVE_CHESTS_PER_CHUNK
+		local regular_count = base_rand:next(
+			math.max(1, dungeon_loot.CAVE_CHESTS_PER_CHUNK - 1),
+			dungeon_loot.CAVE_CHESTS_PER_CHUNK)
+		if maxp.y < -64 then
+			regular_count = regular_count + 1
+		end
+		if maxp.y < -256 then
+			regular_count = regular_count + 2
+		end
+		place_chests_from(cave_positions, regular_count)
+
+		-- Large caves (>=6 nodes tall): extra chests
+		local large_extra = dungeon_loot.LARGE_CAVE_CHESTS_EXTRA or 3
+		if maxp.y < -128 then
+			large_extra = large_extra + 1
+		end
+		if maxp.y < -512 then
+			large_extra = large_extra + 2
+		end
+		place_chests_from(large_positions, large_extra)
 	end
 end)

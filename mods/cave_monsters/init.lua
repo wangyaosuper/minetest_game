@@ -150,7 +150,7 @@ local cave_stalker_def = {
 	jump = true,
 	floats = 0,
 	drops = {
-		{name = "default:flint", chance = 3, min = 1, max = 2},
+		{name = "default:flint", chance = 20, min = 1, max = 1},
 		{name = "default:coal_lump", chance = 2, min = 1, max = 3},
 		{name = "default:cobble", chance = 1, min = 1, max = 2},
 	},

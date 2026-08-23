@@ -11,6 +11,11 @@ dungeon_loot.registered_loot = {
 	{name = "default:cactus", chance = 0.4, count = {1, 5},
 		types = {"sandstone", "desert"}},
 
+	-- TNT / explosives (if tnt mod is loaded)
+	{name = "tnt:tnt_stick", chance = 0.85, count = {2, 8}},
+	{name = "tnt:tnt", chance = 0.7, count = {1, 4}},
+	{name = "tnt:gunpowder", chance = 0.75, count = {3, 12}},
+
 	-- minerals
 	{name = "default:coal_lump", chance = 0.9, count = {2, 15}},
 	{name = "default:gold_ingot", chance = 0.5},
