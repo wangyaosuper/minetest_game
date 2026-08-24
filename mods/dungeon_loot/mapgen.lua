@@ -332,22 +332,28 @@ minetest.register_on_generated(function(minp, maxp, blockseed)
 			end
 
 			local regular_count = base_rand:next(
-				math.max(1, dungeon_loot.CAVE_CHESTS_PER_CHUNK - 1),
+				math.max(0, dungeon_loot.CAVE_CHESTS_PER_CHUNK - 1),
 				dungeon_loot.CAVE_CHESTS_PER_CHUNK)
-			if maxp.y < -64 then
-				regular_count = regular_count + 2
+			if maxp.y < -15 then
+				regular_count = regular_count + 1
 			end
-			if maxp.y < -256 then
-				regular_count = regular_count + 3
+			if maxp.y < -41 then
+				regular_count = regular_count + 1
+			end
+			if maxp.y < -80 then
+				regular_count = regular_count + 1
 			end
 			place_chests_from(cave_positions, regular_count)
 
-			local large_extra = dungeon_loot.LARGE_CAVE_CHESTS_EXTRA or 4
-			if maxp.y < -128 then
-				large_extra = large_extra + 2
+			local large_extra = dungeon_loot.LARGE_CAVE_CHESTS_EXTRA or 1
+			if maxp.y < -30 then
+				large_extra = large_extra + 1
 			end
-			if maxp.y < -512 then
-				large_extra = large_extra + 3
+			if maxp.y < -60 then
+				large_extra = large_extra + 1
+			end
+			if maxp.y < -120 then
+				large_extra = large_extra + 1
 			end
 			place_chests_from(large_positions, large_extra)
 		end
@@ -407,15 +413,17 @@ local function maybe_seed_cave_area(minp, maxp)
 	end
 
 	local regular_count = base_rand:next(
-		math.max(1, dungeon_loot.CAVE_CHESTS_PER_CHUNK - 1),
+		math.max(0, dungeon_loot.CAVE_CHESTS_PER_CHUNK - 1),
 		dungeon_loot.CAVE_CHESTS_PER_CHUNK)
-	if maxp.y < -64 then regular_count = regular_count + 2 end
-	if maxp.y < -256 then regular_count = regular_count + 3 end
+	if maxp.y < -15 then regular_count = regular_count + 1 end
+	if maxp.y < -41 then regular_count = regular_count + 1 end
+	if maxp.y < -80 then regular_count = regular_count + 1 end
 	place_subset(cave_positions, regular_count)
 
-	local large_extra = dungeon_loot.LARGE_CAVE_CHESTS_EXTRA or 4
-	if maxp.y < -128 then large_extra = large_extra + 2 end
-	if maxp.y < -512 then large_extra = large_extra + 3 end
+	local large_extra = dungeon_loot.LARGE_CAVE_CHESTS_EXTRA or 1
+	if maxp.y < -30 then large_extra = large_extra + 1 end
+	if maxp.y < -60 then large_extra = large_extra + 1 end
+	if maxp.y < -120 then large_extra = large_extra + 1 end
 	place_subset(large_positions, large_extra)
 end
 
@@ -424,8 +432,8 @@ minetest.register_abm({
 	nodenames = {"group:stone", "group:cracky", "default:cobble",
 		"default:mossycobble", "default:desert_cobble"},
 	neighbors = {"air"},
-	interval = 17,
-	chance = 120,
+	interval = 23,
+	chance = 480,
 	catch_up = false,
 	action = function(pos, node)
 		if pos.y >= -2 then
@@ -477,8 +485,8 @@ minetest.register_chatcommand("seedcavechests", {
 		local large_positions = cave_info.large_cave_positions or {}
 
 		local placed = 0
-		local target_reg = math.ceil(#cave_positions * 0.5)
-		local target_large = math.ceil(#large_positions * 0.8)
+		local target_reg = math.ceil(#cave_positions * 0.125)
+		local target_large = math.ceil(#large_positions * 0.20)
 
 		local reg_chosen = random_sample(base_rand, cave_positions, target_reg)
 		for _, cpos in ipairs(reg_chosen) do
