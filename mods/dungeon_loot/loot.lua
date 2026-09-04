@@ -14,14 +14,17 @@ dungeon_loot.registered_loot = {
 	{name = "default:flint", chance = 0.75, count = {2, 5}},
 
 	-- Shallow food (-1 ~ -14)
-	{name = "default:apple", chance = 0.55, count = {2, 5}, y = {-14, -1}},
+	{name = "default:apple", chance = 0.75, count = {2, 5}, y = {-14, -1}},
+	{name = "farming:bread", chance = 0.55, count = {1, 3}, y = {-14, -1}},
 	{name = "default:cactus", chance = 0.35, count = {1, 4}, y = {-14, -1},
 		types = {"sandstone", "desert"}},
 
 	-- Mid food (-15 ~ -40)
-	{name = "farming:bread", chance = 0.65, count = {2, 5}, y = {-40, -15}},
+	{name = "default:apple", chance = 0.65, count = {2, 5}, y = {-40, -15}},
+	{name = "farming:bread", chance = 0.80, count = {2, 5}, y = {-40, -15}},
 	-- Deep food (-41 and below)
-	{name = "farming:bread", chance = 0.80, count = {3, 8}, y = {-32768, -41}},
+	{name = "default:apple", chance = 0.55, count = {2, 5}, y = {-32768, -41}},
+	{name = "farming:bread", chance = 0.90, count = {3, 8}, y = {-32768, -41}},
 	{name = "default:apple_gold", chance = 0.10, count = {1, 2}, y = {-32768, -41}},
 
 	--

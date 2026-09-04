@@ -13,7 +13,7 @@ cave_monsters.MAX_NEARBY = 5
 local SPAWN_LIGHT_MAX = 7
 local SPAWN_Y_MAX = -5
 local CHASE_DISTANCE = 16
-local ATTACK_DISTANCE = 1.9
+local ATTACK_DISTANCE = 1.4
 local ATTACK_INTERVAL = 1.0
 
 local function noise3d_integer(noise, pos)
@@ -153,6 +153,8 @@ local cave_stalker_def = {
 		{name = "default:flint", chance = 20, min = 1, max = 1},
 		{name = "default:coal_lump", chance = 2, min = 1, max = 3},
 		{name = "default:cobble", chance = 1, min = 1, max = 2},
+		{name = "default:apple", chance = 5, min = 1, max = 2},
+		{name = "farming:bread", chance = 7, min = 1, max = 2},
 	},
 	armor_groups = {fleshy = 100, stone = 70, cracky = 50},
 	attack = {
