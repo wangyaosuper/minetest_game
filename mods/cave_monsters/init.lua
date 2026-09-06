@@ -153,8 +153,8 @@ local cave_stalker_def = {
 		{name = "default:flint", chance = 20, min = 1, max = 1},
 		{name = "default:coal_lump", chance = 2, min = 1, max = 3},
 		{name = "default:cobble", chance = 1, min = 1, max = 2},
-		{name = "default:apple", chance = 5, min = 1, max = 2},
-		{name = "farming:bread", chance = 7, min = 1, max = 2},
+		{name = "default:apple", chance = 2, min = 1, max = 3},
+		{name = "farming:bread", chance = 3, min = 1, max = 3},
 	},
 	armor_groups = {fleshy = 100, stone = 70, cracky = 50},
 	attack = {
