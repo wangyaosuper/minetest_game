@@ -24,7 +24,14 @@ player_api.register_model("character.b3d", {
 minetest.register_on_joinplayer(function(player)
 	player_api.set_model(player, "character.b3d")
 	player:set_properties({hp_max = 100})
-	if player:get_hp() > 100 then
+	if player:get_hp() <= 0 then
+		player:set_hp(100)
+	elseif player:get_hp() > 100 then
 		player:set_hp(100)
 	end
+end)
+
+minetest.register_on_newplayer(function(player)
+	player:set_properties({hp_max = 100})
+	player:set_hp(100)
 end)
